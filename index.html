@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Calculator Pro</title>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #fff; }
+        .page { display: none; height: 100vh; flex-direction: column; position: absolute; width: 100%; }
+        .active { display: flex; }
+
+        /* Calculator UI */
+        .settings { position: absolute; top: 15px; right: 20px; font-size: 24px; cursor: pointer; z-index: 10; color: #555; }
+        #display { background: white; padding: 40px 25px 20px; text-align: right; border-bottom: 1px solid #f0f0f0; }
+        #exp { font-size: 2.2rem; color: #000; min-height: 3rem; word-break: break-all; }
+        #res { font-size: 1.6rem; color: #999; min-height: 2rem; }
+        .buttons { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 20px; background: #fff; }
+        button { border: none; border-radius: 50px; font-size: 1.5rem; background: #f7f8fa; color: #000; transition: 0.1s; cursor: pointer; }
+        button:active { background: #eef0f2; }
+        .op { color: #4c84ff; font-weight: 500; }
+        .equal { background: #4c84ff; color: white; }
+        .equal:active { background: #3b71e8; }
+
+        /* Chat UI */
+        .header { background: #075e54; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        #chatBox { flex: 1; overflow-y: auto; padding: 15px; background: #e5ddd5; display: flex; flex-direction: column; gap: 10px; }
+        .msg { padding: 10px; border-radius: 12px; max-width: 75%; font-size: 1rem; position: relative; word-wrap: break-word; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
+        .me { background: #dcf8c6; align-self: flex-end; border-top-right-radius: 0; }
+        .other { background: white; align-self: flex-start; border-top-left-radius: 0; }
+        .chat-img { max-width: 100%; border-radius: 8px; margin-top: 5px; }
+        
+        .inputArea { display: flex; padding: 10px; background: #f0f0f0; align-items: center; gap: 10px; }
+        .inputArea input { flex: 1; padding: 12px; border-radius: 25px; border: none; outline: none; }
+        .icon-btn { font-size: 1.5rem; cursor: pointer; color: #075e54; }
+
+        /* Login & Policy */
+        .login, .policy { padding: 40px; text-align: center; }
+        .login input { width: 100%; padding: 15px; margin-top: 15px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; }
+        .btn-main { background: #4c84ff; color: white; border: none; padding: 15px; border-radius: 10px; width: 100%; font-weight: bold; margin-top: 20px; cursor: pointer; }
+    </style>
+</head>
+
+<body>
+
+<div id="calc" class="page active">
+    <div class="settings" onclick="show('policy')">⋮</div>
+    <div id="display">
+        <div id="exp"></div>
+        <div id="res"></div>
+    </div>
+    <div class="buttons">
+        <button class="op" onclick="clearC()">AC</button>
+        <button class="op" onclick="del()">⌫</button>
+        <button class="op" onclick="add('%')">%</button>
+        <button class="op" onclick="add('/')">÷</button>
+        <button onclick="add(7)">7</button><button onclick="add(8)">8</button><button onclick="add(9)">9</button>
+        <button class="op" onclick="add('*')">×</button>
+        <button onclick="add(4)">4</button><button onclick="add(5)">5</button><button onclick="add(6)">6</button>
+        <button class="op" onclick="add('-')">−</button>
+        <button onclick="add(1)">1</button><button onclick="add(2)">2</button><button onclick="add(3)">3</button>
+        <button class="op" onclick="add('+')">+</button>
+        <button onclick="add('00')">00</button><button onclick="add(0)">0</button><button onclick="add('.')">.</button>
+        <button class="equal" onclick="calc()">=</button>
+    </div>
+</div>
+
+<div id="policy" class="page">
+    <div class="policy">
+        <h3>Privacy Policy</h3>
+        <p style="text-align: left; color: #666; font-size: 0.9rem; line-height: 1.6;">
+            1. This app provides standard calculation services.<br>
+            2. No unauthorized data collection is performed.<br>
+            3. All local operations are secure and private.<br>
+            4. Real-time updates are handled via Firebase SSL.<br>
+            5. User authentication is strictly verified.<br>
+            6. By clicking Done, you accept all utility terms.
+        </p>
+        <button class="btn-main" 
+            onmousedown="holdStart()" onmouseup="holdEnd()" 
+            ontouchstart="holdStart()" ontouchend="holdEnd()" 
+            onclick="show('calc')">Done</button>
+    </div>
+</div>
+
+<div id="login" class="page">
+    <div class="login">
+        <h2 style="color:#4c84ff">Secure Access</h2>
+        <input id="email" type="email" placeholder="Email Address">
+        <input id="pass" type="password" placeholder="Password">
+        <button class="btn-main" onclick="login()">Login</button>
+    </div>
+</div>
+
+<div id="chat" class="page">
+    <div class="header">
+        <span><b> Chat</b></span>
+        <span onclick="logout()" style="cursor:pointer; font-size: 0.8rem;">Logout</span>
+    </div>
+    <div id="chatBox"></div>
+    <div class="inputArea">
+        <label class="icon-btn">📷<input type="file" id="imgIn" accept="image/*" style="display:none" onchange="sendImg()"></label>
+        <input id="msgInput" placeholder="Message..." onkeypress="if(event.key==='Enter') sendMsg()">
+        <button onclick="sendMsg()" style="border:none; background:none; color:#075e54; font-size:1.5rem;">➤</button>
+    </div>
+</div>
+
+<script>
+/* Firebase Init */
+const firebaseConfig = {
+    apiKey: "AIzaSyA3SUYj9Ubgm3ExNmPZGwjuipzgNed9XLo",
+    authDomain: "mysecretchat-84c2d.firebaseapp.com",
+    databaseURL: "https://mysecretchat-84c2d-default-rtdb.firebaseio.com",
+    projectId: "mysecretchat-84c2d",
+    storageBucket: "mysecretchat-84c2d.firebasestorage.app",
+    messagingSenderId: "984651980030",
+    appId: "1:984651980030:web:8067b660c918f8e00859af"
+};
+firebase.initializeApp(firebaseConfig);
+
+/* Navigation */
+function show(id){
+    document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+    document.getElementById(id).classList.add("active");
+}
+
+/* Calculator Logic */
+let expr = "";
+function add(v){ expr += v; document.getElementById("exp").innerText = expr; }
+function clearC(){ expr = ""; document.getElementById("exp").innerText = ""; document.getElementById("res").innerText = ""; }
+function del(){ expr = expr.slice(0,-1); document.getElementById("exp").innerText = expr || ""; }
+function calc(){
+    try {
+        let r = eval(expr.replace('×','*').replace('÷','/').replace('−','-'));
+        document.getElementById("res").innerText = r;
+    } catch { document.getElementById("res").innerText = "Error"; }
+}
+
+/* Secret Trigger */
+let timer;
+function holdStart(){ timer = setTimeout(()=> show("login"), 5000); }
+function holdEnd(){ clearTimeout(timer); }
+
+/* Auth Logic */
+let currentUserEmail;
+function login(){
+    let email = document.getElementById("email").value;
+    let pass = document.getElementById("pass").value;
+    firebase.auth().signInWithEmailAndPassword(email, pass)
+    .then(u => {
+        currentUserEmail = u.user.email;
+        show("chat");
+        loadMessages();
+    }).catch(e => alert(e.message));
+}
+
+/* Chat Logic */
+function getRoomId(){
+    return ["wakadegorakh14@gmail.com","wakadekalpit6@gmail.com"].sort().join("_").replace(/\./g, ",");
+}
+
+function sendMsg(){
+    let text = document.getElementById("msgInput").value;
+    if(!text) return;
+    firebase.database().ref("chats/" + getRoomId()).push({
+        sender: currentUserEmail,
+        msg: text,
+        type: 'text',
+        time: Date.now()
+    });
+    document.getElementById("msgInput").value = "";
+}
+
+function sendImg(){
+    let file = document.getElementById("imgIn").files[0];
+    let reader = new FileReader();
+    reader.onload = (e) => {
+        firebase.database().ref("chats/" + getRoomId()).push({
+            sender: currentUserEmail,
+            msg: e.target.result,
+            type: 'img',
+            time: Date.now()
+        });
+    };
+    reader.readAsDataURL(file);
+}
+
+function loadMessages(){
+    const chatRef = firebase.database().ref("chats/" + getRoomId());
+    chatRef.off(); // Clear previous listeners
+    chatRef.on("child_added", snap => {
+        let d = snap.val();
+        let div = document.createElement("div");
+        div.classList.add("msg", d.sender === currentUserEmail ? "me" : "other");
+        
+        if(d.type === 'img') {
+            div.innerHTML = `<img src="${d.msg}" class="chat-img">`;
+        } else {
+            div.innerText = d.msg;
+        }
+        
+        document.getElementById("chatBox").appendChild(div);
+        document.getElementById("chatBox").scrollTop = document.getElementById("chatBox").scrollHeight;
+    });
+}
+
+function logout(){ firebase.auth().signOut(); show("calc"); location.reload(); }
+</script>
+
+</body>
+</html>
